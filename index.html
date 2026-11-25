@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>胶片录像带调节器</title>
+<style>
+/* 看片台：中性深灰（不干扰判断图片的紫），图片占满，整行即推子 */
+:root{color-scheme:dark;--bg:#0e0e10;--panel:#18181b;--row:#232327;--row2:#1e1e22;--line:#2c2c31;--ink:#f2f1f5;--dim:#a3a2ab;--faint:#85848e;--acc:#b7a5ff;--fill:#4b4270}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.3 -apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template:minmax(0,1fr) auto/auto minmax(0,1fr) 320px;height:100dvh}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible,label:focus-within:has(:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
+
+.stage{position:relative;overflow:hidden;touch-action:none;cursor:grab}
+.stage:active{cursor:grabbing}
+.stage canvas{position:absolute;display:block}
+.stage.drop::after{content:"";position:absolute;inset:12px;border:2px solid var(--acc);border-radius:10px}
+.split{position:absolute;width:32px;margin-left:-16px;cursor:ew-resize;touch-action:none}
+.split::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 6px #0009}
+.split::after{content:"";position:absolute;left:4px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:50%;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23222' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9.5 8 5.5 12l4 4M14.5 8l4 4-4 4'/%3E%3C/svg%3E") center/20px no-repeat;box-shadow:0 1px 6px #000a}
+.msg{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);padding:8px 14px;border-radius:8px;background:#000c;max-width:90%;opacity:0;transition:opacity .2s;pointer-events:none}
+.msg.on{opacity:1}
+#json{position:absolute;inset:auto 16px 60px;width:auto;height:160px;background:#000e;color:var(--ink);border:1px solid var(--line);border-radius:8px;font:12px/1.4 ui-monospace,Menlo,monospace;padding:10px}
+
+.stage,.strip{grid-column:2}
+.rail{grid-row:1/3;display:flex;flex-direction:column;gap:8px;padding:16px 0 16px 16px;overflow-y:auto;scrollbar-width:none}
+.rail>*{flex:none;width:64px;height:48px;border-radius:6px;cursor:pointer;display:grid;place-items:center;color:var(--dim)}
+.rail button{background:var(--row2) center/cover;box-shadow:inset 0 0 0 1px #fff2;opacity:.75}
+.rail button:hover,.rail .on{opacity:1}
+.rail .on{box-shadow:inset 0 0 0 2px var(--acc),inset 0 0 0 4px var(--bg)}
+.rail label{border:1.5px dashed #4a4a52;position:relative}
+.rail label:hover{color:var(--ink);border-color:var(--dim)}
+.rail label input{position:absolute;width:1px;height:1px;opacity:0}
+.rail svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.strip{display:flex;justify-content:safe center;gap:8px;padding:10px 16px 14px;overflow-x:auto;scrollbar-width:none}
+.strip button{flex:0 0 auto;width:104px;color:var(--dim);font-size:12px}
+.strip canvas{display:block;width:100%;height:66px;object-fit:cover;border-radius:6px;margin-bottom:6px;background:var(--row2);box-shadow:0 0 0 1px #fff1}
+.strip button:hover{color:var(--ink)}
+.strip button.on{color:var(--ink)}
+.strip button.on canvas{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--acc)}
+
+.panel{grid-column:3;grid-row:1/3;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line)}
+.tools{display:flex;gap:4px;padding:12px 12px 8px}
+.ic{flex:1;height:38px;border-radius:8px;display:grid;place-items:center;color:var(--dim);cursor:pointer}
+.ic:hover{background:var(--row);color:var(--ink)}
+.ic[aria-pressed=true]{background:var(--fill);color:#fff}
+.ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ic input{position:absolute;width:1px;height:1px;opacity:0}
+.mods{flex:1;overflow-y:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:#3a3a40 transparent}
+.mod{flex:none;display:grid;grid-template-columns:minmax(0,1fr) 36px;border-radius:9px;background:var(--row);overflow:hidden}
+.fader{position:relative;height:var(--h,46px);display:block}
+.fader input{position:absolute;inset:0;width:100%;height:100%;margin:0;cursor:ew-resize}
+.fader span,.fader output{position:absolute;top:0;line-height:var(--h,46px);pointer-events:none}
+.fader span{left:14px;font-size:14px;font-weight:500}
+.fader output{right:12px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.mod.zero>.fader span,.mod.zero>.fader output{color:var(--faint)}
+.more{display:grid;place-items:center;color:var(--faint);border-left:1px solid var(--panel)}
+.more:hover{color:var(--ink);background:#2b2b30}
+.more::before{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 1.6px 1.6px 0;transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+.more[aria-expanded=true]::before{transform:translateY(2px) rotate(225deg)}
+.adv{grid-column:1/3;padding:3px;display:grid;gap:3px;background:var(--panel);box-shadow:inset 0 0 0 1px var(--row);border-radius:0 0 9px 9px}
+.adv .fader{--h:32px;background:var(--row2);border-radius:5px;overflow:hidden;--fill:#39354c}
+.adv .fader span{left:11px;font-size:13px;font-weight:400;color:var(--dim)}
+.adv .fader output{right:10px;font-size:12px;color:var(--dim)}
+.rst{height:30px;color:var(--dim);font-size:12px;border-radius:5px}
+.rst:hover{color:var(--ink);background:var(--row2)}
+.out{padding:12px;border-top:1px solid var(--line)}
+.pri{width:100%;height:42px;border-radius:9px;background:var(--ink);color:#17171a;font-size:14px;font-weight:600}
+.pri:hover{background:#fff}
+input[type=range]{-webkit-appearance:none;appearance:none;--p:50%;background:linear-gradient(90deg,var(--fill) var(--p),transparent var(--p));touch-action:pan-y}
+input[type=range]:focus-visible{outline-offset:-2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:2px;height:var(--h,46px);background:var(--acc)}
+input[type=range]::-moz-range-thumb{width:2px;height:var(--h,46px);border:0;border-radius:0;background:var(--acc)}
+input[type=range]::-webkit-slider-runnable-track{height:100%}
+dialog{width:300px;padding:20px;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);box-shadow:0 24px 60px #000a}
+dialog::backdrop{background:#0009}
+dialog h2{margin:0 0 20px;font-size:16px;font-weight:600}
+dialog div{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+dialog button{height:38px;border-radius:8px;background:var(--row);font-weight:500}
+dialog button:hover{background:#2f2f35}
+dialog .ok{background:var(--ink);color:#17171a}dialog .ok:hover{background:#fff}
+@media(max-width:760px){
+ .app{grid-template:34dvh auto auto minmax(0,1fr)/minmax(0,1fr)}
+ .stage,.strip{grid-column:1}.stage{grid-row:1}.strip{grid-row:3}
+ .rail{grid-row:2;flex-direction:row;padding:0 12px 4px;overflow-x:auto}.rail>*{width:52px;height:39px}
+ .panel{grid-column:1;grid-row:4;border-left:0;border-top:1px solid var(--line)}
+ .strip{justify-content:flex-start;padding:8px 12px}.strip button{width:72px}.strip canvas{height:44px;margin-bottom:4px}
+ .tools{padding:6px 12px 4px}.out{padding:8px 12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" id="rail" aria-label="图片"></nav>
+  <div class="stage" id="stage">
+    <canvas id="glc" aria-label="预览"></canvas>
+    <div class="split" id="split" role="slider" tabindex="0" aria-label="对比分割线" aria-valuemin="0" aria-valuemax="100" hidden></div>
+    <textarea id="json" hidden readonly aria-label="当前参数"></textarea>
+    <div class="msg" id="msg" role="status"></div>
+  </div>
+  <div class="strip" id="presets"></div>
+  <aside class="panel">
+    <div class="tools">
+      <button class="ic" id="cmp" title="对比原图" aria-label="对比原图" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M12 2v20"/><path d="M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7z" fill="currentColor" stroke="none" opacity=".45"/></svg></button>
+      <button class="ic" id="zoom" title="实际像素" aria-label="实际像素" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M5 8.5 7.5 7v10M16 8.5 18.5 7v10M12 10v.01M12 14.5v.01"/></svg></button>
+      <button class="ic" id="seed" title="随机调整" aria-label="随机调整"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5v.01M15.5 8.5v.01M12 12v.01M8.5 15.5v.01M15.5 15.5v.01" stroke-width="2.4"/></svg></button>
+      <button class="ic" id="copy" title="复制参数" aria-label="复制参数"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 5.5v0a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"/></svg></button>
+    </div>
+    <div id="mods" class="mods"></div>
+    <div class="out"><button class="pri" id="export">导出 PNG</button></div>
+  </aside>
+</div>
+<dialog id="ask" aria-labelledby="askT"><form method="dialog"><h2 id="askT">随机后会丢失当前调整，确认吗？</h2><div><button>取消</button><button class="ok" id="reseed">确认</button></div></form></dialog>
+<script>
+{
+// build.py inlines every "assets/…jpg" below as a data URI for the single-file version
+const IMAGES = [["烛光","assets/sample.jpg"],["雨夜","assets/neon.jpg"],["天台","assets/dusk.jpg"],["田野","assets/field.jpg"],["人像","assets/face.jpg"],["机房","assets/lab.jpg"]];
+// [id, label, min, max, full(at 100%), neutral(null = not scaled), unit]
+const MODS = [
+ {id:'tone',name:'影调',p:[
+  ['ev','曝光提升',0,2,1,0,'档'],['k','对比度',1,4,2.5,1,''],['toe','暗部深度',0,1.6,.8,0,''],['sat','饱和度',0,1.5,.65,1,''],
+  ['lav','高光冷白',0,1,1,0,''],['shd','暗部紫色',0,.7,.35,0,''],['vig','暗角',0,.6,.28,0,'']]},
+ {id:'glow',name:'光晕',p:[
+  ['hal','胶片光晕',0,1.8,.9,0,''],['bloom','录像带光晕',0,1,.45,0,''],['halR','光晕范围',.3,3,1,null,'×'],['halT','光晕起点',.3,.9,.6,null,'']]},
+ {id:'res',name:'清晰度',p:[
+  ['cap','采样宽度',160,1024,320,1024,'px'],['smear','横向拖影',0,3,.8,0,'']]},
+ {id:'chroma',name:'色彩溢出',p:[
+  ['cblur','溢出长度',0,80,36,0,'px'],['coff','色彩偏移',0,30,10,0,'px'],['cgain','溢出浓度',.5,2.5,1.5,1,'×']]},
+ {id:'grain',name:'颗粒',p:[
+  ['grain','细颗粒',0,16,6,0,''],['blot','斑驳',0,.3,.1,0,'']]},
+ {id:'signal',name:'信号失真',p:[
+  ['jit','行抖动',0,2,.5,0,''],['scan','扫描线',0,.5,.18,0,'']]},
+ {id:'jpeg',name:'压缩损伤',p:[
+  ['quant','量化强度',0,12,6,0,'×']]}
+];
+const PRESETS = [
+ ['推荐',{tone:50,glow:50,res:45,chroma:35,grain:50,signal:45,jpeg:30}],
+ ['只要胶片',{tone:50,glow:50,res:0,chroma:0,grain:0,signal:0,jpeg:0}],
+ ['轻',{tone:40,glow:40,res:25,chroma:25,grain:30,signal:25,jpeg:15}],
+ ['中',{tone:50,glow:55,res:65,chroma:60,grain:70,signal:65,jpeg:50}],
+ ['重',{tone:60,glow:65,res:100,chroma:100,grain:100,signal:100,jpeg:100}],
+ ['关闭',{tone:0,glow:0,res:0,chroma:0,grain:0,signal:0,jpeg:0}]
+];
+const FULL0={};MODS.forEach(m=>m.p.forEach(p=>FULL0[p[0]]=p[4]));
+const fresh=()=>({m:{...PRESETS[0][1]},f:{...FULL0},seed:7});
+let S=fresh();
+try{const s=JSON.parse(localStorage.getItem('lofiTuner2')||'null');if(s&&s.m)S={m:{...S.m,...s.m},f:{...S.f,...s.f},seed:s.seed||7}}catch(e){}
+const $=id=>document.getElementById(id);
+let msgT=0;const say=t=>{const m=$('msg');m.textContent=t;m.classList.add('on');clearTimeout(msgT);msgT=setTimeout(()=>m.classList.remove('on'),2600)};
+let stT=0;const save=()=>{try{localStorage.setItem('lofiTuner2',JSON.stringify(S))}catch(e){}};
+const store=()=>{clearTimeout(stT);stT=setTimeout(save,200)};addEventListener('pagehide',save);
+
+// ---------- UI ----------
+const fmt=(v,u)=>{const a=Math.abs(v);return (a>=100?v.toFixed(0):a>=10?v.toFixed(1):v.toFixed(2))+(u?' '+u:'')};
+$('mods').innerHTML=MODS.map(m=>`<section class="mod" id="m-${m.id}">
+ <label class="fader"><input type="range" min="0" max="100" step="1" id="r-${m.id}" data-m="${m.id}" aria-label="${m.name}强度"><span>${m.name}</span><output id="o-${m.id}"></output></label>
+ <button class="more" aria-expanded="false" aria-controls="a-${m.id}" data-more="${m.id}" title="细调" aria-label="${m.name}细调"></button>
+ <div class="adv" id="a-${m.id}" hidden>
+ ${m.p.map(([id,l,mn,mx])=>`<label class="fader"><input type="range" id="p-${id}" data-p="${id}" min="${mn}" max="${mx}" step="${(mx-mn)/200}" aria-label="${l}"><span>${l}</span><output id="po-${id}"></output></label>`).join('')}
+ <button class="rst" data-rst="${m.id}" hidden>恢复默认</button></div></section>`).join('');
+$('presets').innerHTML=PRESETS.map((p,i)=>`<button data-pre="${i}"><canvas width="208" height="132"></canvas>${p[0]}</button>`).join('');
+const units={};MODS.forEach(m=>m.p.forEach(p=>units[p[0]]=p[6]));
+function paint(el){const mn=+el.min,mx=+el.max;el.style.setProperty('--p',((el.value-mn)/(mx-mn)*100)+'%')}
+function sync(){
+ MODS.forEach(m=>{const r=$('r-'+m.id);r.value=S.m[m.id];paint(r);$('o-'+m.id).textContent=S.m[m.id];$('m-'+m.id).classList.toggle('zero',!S.m[m.id]);
+  m.p.forEach(([id])=>{const e=$('p-'+id);e.value=S.f[id];paint(e);$('po-'+id).textContent=fmt(S.f[id],units[id])});
+  document.querySelector(`[data-rst=${m.id}]`).hidden=m.p.every(p=>S.f[p[0]]===p[4])});
+ const key=m=>MODS.map(x=>m[x.id]).join(),k=key(S.m);
+ document.querySelectorAll('[data-pre]').forEach(b=>b.classList.toggle('on',key(PRESETS[+b.dataset.pre][1])===k));
+}
+function changed(){sync();store();live()}
+document.addEventListener('input',e=>{const t=e.target,d=t.dataset;
+ if(d.m)S.m[d.m]=+t.value;else if(d.p)S.f[d.p]=+t.value;else return;
+ changed()});
+document.addEventListener('change',e=>{if(e.target.dataset.p)thumbsSoon()});
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.more){const o=$('a-'+b.dataset.more).hidden;document.querySelectorAll('[data-more]').forEach(x=>{const on=o&&x===b;$('a-'+x.dataset.more).hidden=!on;x.setAttribute('aria-expanded',on)})}
+ else if(b.dataset.pre){const p=PRESETS[+b.dataset.pre];S.m={...p[1]};changed()}
+ else if(b.dataset.rst){MODS.find(m=>m.id===b.dataset.rst).p.forEach(p=>S.f[p[0]]=p[4]);changed();thumbsSoon()}});
+$('seed').onclick=()=>$('ask').showModal();
+$('ask').onclick=e=>{if(e.target===$('ask'))$('ask').close()};
+$('reseed').onclick=()=>{const R=(a,b)=>Math.round(a+Math.random()*(b-a));
+ S.m={tone:R(25,80),glow:R(10,90),res:R(0,90),chroma:R(0,100),grain:R(10,100),signal:R(0,100),jpeg:R(0,60)};S.f={...FULL0};S.seed=(S.seed*48271+11)%2147483647;changed();thumbsSoon()};
+
+// effective value of a parameter
+function E(id){for(const m of MODS)for(const p of m.p)if(p[0]===id){const f=S.f[id];return p[5]===null?f:p[5]+(f-p[5])*S.m[m.id]/100}}
+
+// ---------- WebGL ----------
+const glc=$('glc');
+const gl=glc.getContext('webgl2',{preserveDrawingBuffer:true,premultipliedAlpha:false,antialias:false});
+if(!gl)say('此浏览器不支持 WebGL2');
+if(gl)gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float');
+const VS=`#version 300 es
+in vec2 a;out vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0,1);}`;
+const HEAD=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;
+uint hs(uint x){x^=x>>16;x*=0x7feb352du;x^=x>>15;x*=0x846ca68bu;x^=x>>16;return x;}
+float h2(int x,int y,int s){return float(hs(uint(x)*73856093u^hs(uint(y)*19349663u^uint(s)*83492791u)))/4294967296.;}
+float gs(int x,int y,int s){float u=max(h2(x,y,s),1e-6),v=h2(x,y,s+101);return sqrt(-2.*log(u))*cos(6.2831853*v);}
+`;
+const FS={
+tone:`uniform sampler2D t;uniform float ev,k,toe,mx,sat,lav,shd;
+void main(){vec3 c=texture(t,uv).rgb;float L=dot(c,vec3(.299,.587,.114));float p2=exp2(ev);float x=max(L*p2,1e-4);
+float hiN=1./(1.+pow(.3/p2,k));float cv=1./(1.+pow(.3/x,k))/hiN*1.06;float Lt=mix(L,cv,mx);
+if(Lt<.35)Lt=.35*pow(max(Lt,0.)/.35,1.+toe);float cf=pow(Lt/max(L,1e-3),.15)*sat;vec3 r=Lt+(c-L)*cf;
+float w=pow(clamp((Lt-.62)/.38,0.,1.),1.5)*lav;float sw=clamp((.18-Lt)/.18,0.,1.)*shd;
+r=mix(r,vec3(.95,.92,1.)*max(Lt,0.),w);r=mix(r,vec3(.07,.02,.17),sw);o=vec4(clamp(r,0.,1.),1);}`,
+mask:`uniform sampler2D t;uniform float thr;void main(){vec3 c=texture(t,uv).rgb;float b=clamp((dot(c,vec3(1./3.))-thr)/(1.-thr),0.,1.);o=vec4(c*b,1);}`,
+bmask:`uniform sampler2D t;void main(){vec3 c=texture(t,uv).rgb;o=vec4(dot(c,vec3(1./3.))>175./255.?c:vec3(0),1);}`,
+blur:`uniform sampler2D t;uniform vec2 dir;uniform float sig;
+void main(){if(sig<.3){o=texture(t,uv);return;}int R=int(min(ceil(sig*2.5),60.));vec3 a=vec3(0);float ws=0.;
+for(int i=-R;i<=R;i++){float w=exp(-float(i*i)/(2.*sig*sig));a+=texture(t,uv+dir*float(i)).rgb*w;ws+=w;}o=vec4(a/ws,1);}`,
+film:`uniform sampler2D t,g1,g2;uniform float hal;
+void main(){vec3 c=texture(t,uv).rgb;vec3 a=texture(g1,uv).rgb,b=texture(g2,uv).rgb;float loc=sqrt(clamp(dot(b,vec3(1./3.))*4.,0.,1.));
+vec3 g=clamp((a*.5+b*vec3(1.,.82,1.05)*.9)*hal*loc,0.,1.);o=vec4(1.-(1.-c)*(1.-g),1);}`,
+nz:`uniform float seed;void main(){ivec2 p=ivec2(gl_FragCoord.xy);o=vec4(gs(p.x,p.y,int(seed)+5),0,0,1);}`,
+sig:`uniform sampler2D t,n;uniform vec2 px,res;uniform float smear,cblur,coff,cgain,blot,grain,gain,jit,cell,seed;
+vec3 ycc(vec3 c){c*=255.;return vec3(dot(c,vec3(.299,.587,.114)),128.-.168736*c.r-.331264*c.g+.5*c.b,128.+.5*c.r-.418688*c.g-.081312*c.b);}
+float row(int y,int S){float j=floor(gs(0,y,S)*jit+.5);if(h2(1,y,S+7)<.03*jit)j+=floor(h2(2,y,S+9)*9.)-4.;return j;}
+void main(){int S=int(seed);float ry=gl_FragCoord.y/cell-.5;int r0=int(floor(ry));
+vec2 u=uv-vec2(mix(row(r0,S),row(r0+1,S),fract(ry))*cell/res.x,0.);float Y=ycc(texture(t,u).rgb).x;
+if(smear>.01){float r=max(1.,smear)+.5,a=0.;for(int i=-4;i<=4;i++)a+=ycc(texture(t,u+vec2(float(i)/4.5*r*px.x,0.)).rgb).x;Y=mix(Y,a/9.,min(1.,smear));}
+// 色度：低带宽，向右拖尾（左侧 35%，右侧 100%），上下也串一点
+vec2 cc=vec2(0);float ws=0.,bp=cblur/res.x;
+for(int j=-1;j<=1;j++)for(int i=-10;i<=20;i++){float k=float(i)/20.,w=i<0?1.+k*2.:1.-k*.9;w*=j==0?1.:.5;
+cc+=w*ycc(texture(t,u-vec2(k*bp*(i<0?.7:1.)+coff/res.x,float(j)*cblur*.1/res.y)).rgb).yz;ws+=w;}
+cc=128.+(cc/ws-128.)*cgain;
+vec2 g=gl_FragCoord.xy/(8.*cell);ivec2 g0=ivec2(floor(g));vec2 f=fract(g);f=f*f*(3.-2.*f);
+float n1=mix(mix(gs(g0.x,g0.y,S+3),gs(g0.x+1,g0.y,S+3),f.x),mix(gs(g0.x,g0.y+1,S+3),gs(g0.x+1,g0.y+1,S+3),f.x),f.y);
+Y+=n1*40.*blot+texture(n,uv).r*gain*grain;float cb=cc.x-128.,cr=cc.y-128.;
+o=vec4(clamp(vec3(Y+1.402*cr,Y-.344136*cb-.714136*cr,Y+1.772*cb)/255.,0.,1.),1);}`,
+fin:`uniform sampler2D s,b;uniform vec2 res;uniform float bloom,scan,vig,lineH;
+void main(){vec2 fc=gl_FragCoord.xy;float yT=res.y-fc.y;vec3 c=texture(s,uv).rgb+texture(b,uv).rgb*bloom;
+if(int(floor(yT/lineH))%3==1)c*=1.-scan;vec2 d=(fc/res-.5)*2.;c*=1.-vig*clamp(length(d)-.5,0.,1.);
+o=vec4(clamp(c,0.,1.),1);}`,
+// JPEG：top-down YCbCr 4:2:0，8x8 DCT → 量化 → 逆 DCT
+jy:`uniform sampler2D t;uniform vec2 res;void main(){ivec2 p=min(ivec2(gl_FragCoord.xy),ivec2(res)-1);vec3 c=texelFetch(t,ivec2(p.x,int(res.y)-1-p.y),0).rgb*255.;o=vec4(dot(c,vec3(.299,.587,.114))-128.,0,0,1);}`,
+jc:`uniform sampler2D t;uniform vec2 res;void main(){vec3 c=vec3(0);for(int j=0;j<2;j++)for(int i=0;i<2;i++){ivec2 p=min(ivec2(gl_FragCoord.xy)*2+ivec2(i,j),ivec2(res)-1);c+=texelFetch(t,ivec2(p.x,int(res.y)-1-p.y),0).rgb;}c*=63.75;
+o=vec4(dot(c,vec3(-.168736,-.331264,.5)),dot(c,vec3(.5,-.418688,-.081312)),0,1);}`,
+dct:`uniform sampler2D t;uniform float ax,inv,quant;uniform vec4 q[16];
+void main(){ivec2 p=ivec2(gl_FragCoord.xy);ivec2 d=ax<.5?ivec2(1,0):ivec2(0,1);int k=(ax<.5?p.x:p.y)&7;ivec2 p0=p-d*k;vec2 a=vec2(0);
+for(int i=0;i<8;i++){int x=inv>.5?k:i,u=inv>.5?i:k;a+=texelFetch(t,p0+d*i,0).rg*(u==0?.35355339:.5*cos(float((2*x+1)*u)*.19634954));}
+if(quant>.5){int n=(p.y&7)*8+(p.x&7);float s=q[n/4][n%4];a=floor(a/s+.5)*s;}o=vec4(a,0,1);}`,
+jm:`uniform sampler2D y,c;uniform vec2 res,pad;void main(){vec2 p=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y);float Y=texelFetch(y,ivec2(p),0).r+128.;vec2 b=texture(c,p/pad).rg;
+o=vec4(clamp(vec3(Y+1.402*b.y,Y-.344136*b.x-.714136*b.y,Y+1.772*b.x)/255.,0.,1.),1);}`,
+show:`uniform sampler2D t,s;uniform float sp;void main(){o=vec4((uv.x<sp?texture(s,uv):texture(t,uv)).rgb,1);}`
+};
+const P={};
+function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+if(gl){
+ const vs=sh(gl.VERTEX_SHADER,VS);
+ for(const k in FS){const p=gl.createProgram();gl.attachShader(p,vs);gl.attachShader(p,sh(gl.FRAGMENT_SHADER,HEAD+FS[k]));gl.bindAttribLocation(p,0,'a');gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));P[k]={p,u:{}}}
+ const vb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+ gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+}
+function mkTex(w,h,src,fl){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+ if(src){gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false)}
+ else if(fl)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,w,h,0,gl.RGBA,gl.HALF_FLOAT,null);
+ else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+ for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);return t}
+const RT={};
+function rt(name,w,h,fl){w=Math.max(1,Math.round(w));h=Math.max(1,Math.round(h));const r=RT[name];if(r&&r.w===w&&r.h===h)return r;
+ if(r){gl.deleteTexture(r.t);gl.deleteFramebuffer(r.fb)}const t=mkTex(w,h,null,fl),fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fb);
+ gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return RT[name]={t,fb,w,h}}
+function run(prog,out,tex,uni){const pr=P[prog];gl.useProgram(pr.p);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,out?out.fb:null);gl.viewport(0,0,out?out.w:glc.width,out?out.h:glc.height);
+ let unit=0;for(const k in tex){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,tex[k]);gl.uniform1i(loc(pr,k),unit++)}
+ for(const k in uni){const v=uni[k],l=loc(pr,k);if(l===null)continue;
+  if(v instanceof Float32Array)gl.uniform4fv(l,v);else if(typeof v==='number')gl.uniform1f(l,v);else if(v.length===2)gl.uniform2f(l,...v);else gl.uniform4f(l,...v)}
+ gl.drawArrays(gl.TRIANGLE_STRIP,0,4)}
+function loc(pr,k){if(!(k in pr.u))pr.u[k]=gl.getUniformLocation(pr.p,k);return pr.u[k]}
+
+const QY=[16,11,10,16,24,40,51,61,12,12,14,19,26,58,60,55,14,13,16,24,40,57,69,56,14,17,22,29,51,87,80,62,18,22,37,56,68,109,103,77,24,35,55,64,81,104,113,92,49,64,78,87,103,121,120,101,72,92,95,98,112,100,103,99];
+const QC=[17,18,24,47,99,99,99,99,18,21,26,66,99,99,99,99,24,26,56,99,99,99,99,99,47,66,99,99,99,99,99,99].concat(Array(32).fill(99));
+function qt(b,s){return Float32Array.from(b,v=>Math.max(1,v*s))}
+// one JPEG encode/decode round trip on the GPU
+function jpeg(inp,q,name){const pw=Math.ceil(W/16)*16,ph=Math.ceil(H/16)*16,out=rt(name,W,H),res=[W,H];
+ const pass=(id,w,h,table)=>{const A=rt(id+'A',w,h,true),B=rt(id+'B',w,h,true);run(id,A,{t:inp.t},{res});
+  run('dct',B,{t:A.t},{ax:0,inv:0,quant:0,q:table});run('dct',A,{t:B.t},{ax:1,inv:0,quant:1,q:table});
+  run('dct',B,{t:A.t},{ax:1,inv:1,quant:0,q:table});run('dct',A,{t:B.t},{ax:0,inv:1,quant:0,q:table});return A};
+ const y=pass('jy',pw,ph,qt(QY,q)),c=pass('jc',pw/2,ph/2,qt(QC,q));
+ run('jm',out,{y:y.t,c:c.t},{res,pad:[pw,ph]});return out}
+
+let srcTex=null,result=null,W=0,H=0;
+function render(){
+ if(!srcTex)return;
+ const tone=rt('tone',W,H);
+ run('tone',tone,{t:srcTex},{ev:E('ev'),k:E('k'),toe:E('toe'),mx:S.m.tone/100,sat:E('sat'),lav:E('lav'),shd:E('shd')});
+ const hal=E('hal'),film=rt('film',W,H);
+ const W2=W/2,H2=H/2,W4=W/4,H4=H/4;
+ const mH=rt('mH',W2,H2),aH=rt('aH',W2,H2),g1=rt('g1',W2,H2),mQ=rt('mQ',W4,H4),aQ=rt('aQ',W4,H4),g2=rt('g2',W4,H4);
+ if(hal>0){const R=E('halR'),s1=Math.max(2,W/160)*R/2,s2=Math.max(6,W/30)*R/4;
+  run('mask',mH,{t:tone.t},{thr:E('halT')});
+  run('blur',aH,{t:mH.t},{dir:[1/mH.w,0],sig:s1});run('blur',g1,{t:aH.t},{dir:[0,1/mH.h],sig:s1});
+  run('blur',mQ,{t:mH.t},{dir:[0,0],sig:0});
+  run('blur',aQ,{t:mQ.t},{dir:[1/mQ.w,0],sig:s2});run('blur',g2,{t:aQ.t},{dir:[0,1/mQ.h],sig:s2});}
+ run('film',film,{t:tone.t,g1:g1.t,g2:g2.t},{hal});
+ // 清晰度：固定网格上的低通，等效于降采样再放大，但没有随滑块移动的网格。f 是等效降采样倍数
+ const f=1024/Math.min(E('cap'),1024),k2=Math.sqrt(f*f-1),sl=.5*k2,sn=.41*k2,CELL=1024/707,seed=S.seed%100000;
+ const t1=rt('low1',W,H),low=rt('low',W,H),n0=rt('n0',W,H,true),n1=rt('n1',W,H,true),sg=rt('sig',W,H);
+ run('blur',t1,{t:film.t},{dir:[1/W,0],sig:sl});run('blur',low,{t:t1.t},{dir:[0,1/H],sig:sl});
+ // 颗粒：位置固定的噪声随清晰度一起变软，幅度补偿
+ run('nz',n0,{},{seed});run('blur',n1,{t:n0.t},{dir:[1/W,0],sig:sn});run('blur',n0,{t:n1.t},{dir:[0,1/H],sig:sn});
+ let s1w=0,s2w=0;if(sn<.3)s1w=s2w=1;else for(let i=-Math.ceil(sn*2.5);i<=Math.ceil(sn*2.5);i++){const w=Math.exp(-i*i/(2*sn*sn));s1w+=w;s2w+=w*w}
+ const gain=(2/3+Math.exp(-(f-1)*3)/3)*s1w*s1w/s2w;
+ run('sig',sg,{t:low.t,n:n0.t},{px:[f/W,0],res:[W,H],smear:E('smear'),cblur:E('cblur')*W/1024,coff:E('coff')*W/1024,cgain:E('cgain'),blot:E('blot'),grain:E('grain'),gain,jit:E('jit'),cell:CELL,seed});
+ const bm=rt('bm',W/4,H/4),bt=rt('bt',W/4,H/4),bl=rt('bl',W/4,H/4);
+ const bloom=E('bloom');
+ if(bloom>0){const sb=14*W/1024/4;run('bmask',bm,{t:sg.t},{});run('blur',bt,{t:bm.t},{dir:[1/bm.w,0],sig:sb});run('blur',bl,{t:bt.t},{dir:[0,1/bm.h],sig:sb})}
+ const fo=rt('out',W,H);
+ run('fin',fo,{s:sg.t,b:bl.t},{res:[W,H],bloom,scan:E('scan'),vig:E('vig'),lineH:Math.max(1,Math.round(H/768))});
+ const q=E('quant'),r2=q>.02?jpeg(fo,q,'j1'):fo;
+ result=r2.t;
+}
+
+// ---------- display: every change re-renders the full chain, at most once per frame ----------
+let frame=0,split=0;
+function live(){if(!frame)frame=requestAnimationFrame(()=>{frame=0;render();show(split)})}
+function show(sp){if(srcTex)run('show',null,{t:result,s:srcTex},{sp})}
+
+// preset thumbnails: the real image through the real chain
+let thT=0;
+function thumbsSoon(){clearTimeout(thT);thT=setTimeout(thumbs,250)}
+function thumbs(){if(!srcTex)return;const keep=S;
+ document.querySelectorAll('[data-pre]').forEach(b=>{const p=PRESETS[+b.dataset.pre],c=b.firstChild,k=Math.max(c.width/W,c.height/H),w=c.width/k,h=c.height/k;
+  S={...keep,m:p[1]};render();show(0);
+  const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(glc,(W-w)/2,(H-h)/2,w,h,0,0,c.width,c.height)});
+ S=keep;render();show(split)}
+
+// ---------- viewport: fit, zoom, pan, split ----------
+const stage=$('stage'),sh1=$('split');let Z=1,ox=0,oy=0,box={x:0,y:0,w:1,h:1};
+function fitScale(){return Math.min((stage.clientWidth-40)/W,(stage.clientHeight-32)/H)}
+function place(){if(!W)return;const f=Math.max(.02,fitScale())*Z,w=W*f,h=H*f,cw=stage.clientWidth,ch=stage.clientHeight;
+ const mx=Math.max(0,(w-cw)/2+20),my=Math.max(0,(h-ch)/2+16);ox=Math.max(-mx,Math.min(mx,ox));oy=Math.max(-my,Math.min(my,oy));
+ if(Z===1)ox=oy=0;
+ box={x:(cw-w)/2+ox,y:(ch-h)/2+oy,w,h};
+ Object.assign(glc.style,{left:box.x+'px',top:box.y+'px',width:w+'px',height:h+'px'});
+ Object.assign(sh1.style,{left:box.x+w*split+'px',top:box.y+'px',height:h+'px'});
+ $('zoom').setAttribute('aria-pressed',Z!==1)}
+function zoomTo(z,px,py){z=Math.max(1,Math.min(8/fitScale(),z));const cx=px-stage.clientWidth/2-ox,cy=py-stage.clientHeight/2-oy,k=z/Z;ox-=cx*(k-1);oy-=cy*(k-1);Z=z;place()}
+stage.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();zoomTo(Z*Math.exp(-e.deltaY*(e.ctrlKey?.01:.002)),e.clientX-r.left,e.clientY-r.top)},{passive:false});
+$('zoom').onclick=()=>{if(Z!==1){Z=1;place()}else zoomTo(1/(fitScale()*devicePixelRatio)>1?1/(fitScale()*devicePixelRatio):1/fitScale(),stage.clientWidth/2,stage.clientHeight/2)};
+let pt=null;
+stage.addEventListener('pointerdown',e=>{if(e.button||e.target.id==='json')return;pt={x:e.clientX,y:e.clientY,s:e.target===sh1};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(!pt)return;
+ if(pt.s)setSplit((e.clientX-stage.getBoundingClientRect().left-box.x)/box.w);
+ else{ox+=e.clientX-pt.x;oy+=e.clientY-pt.y;pt.x=e.clientX;pt.y=e.clientY;place()}});
+for(const n of ['pointerup','pointercancel'])stage.addEventListener(n,()=>pt=null);
+new ResizeObserver(place).observe(stage);
+function setSplit(v){split=Math.max(0,Math.min(1,v));sh1.setAttribute('aria-valuenow',Math.round(split*100));place();live()}
+$('cmp').onclick=()=>{const on=sh1.hidden;sh1.hidden=!on;$('cmp').setAttribute('aria-pressed',on);setSplit(on?.5:0)};
+sh1.onkeydown=e=>{const d={ArrowLeft:-.02,ArrowRight:.02}[e.key];if(d){e.preventDefault();setSplit(split+d)}};
+
+// ---------- io ----------
+function loadI(u){return new Promise((a,b)=>{const i=new Image();i.onload=()=>a(i);i.onerror=b;i.src=u})}
+let want=0,cur='';const pics=IMAGES.slice();
+async function setImage(u){const id=++want,im=await loadI(u);if(id!==want)return;
+ W=Math.min(1600,im.naturalWidth);H=Math.round(im.naturalHeight*W/im.naturalWidth);
+ const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(im,0,0,W,H);
+ glc.width=W;glc.height=H;if(srcTex)gl.deleteTexture(srcTex);srcTex=mkTex(W,H,c);Z=1;cur=u;rail();place();thumbs()}
+function rail(){$('rail').querySelectorAll('button').forEach(b=>b.remove());
+ pics.forEach(([n,u])=>{const b=document.createElement('button');b.title=n;b.ariaLabel=n;b.style.backgroundImage=`url("${u}")`;b.classList.toggle('on',u===cur);b.onclick=()=>setImage(u).catch(()=>say('图片载入失败'));$('rail').insertBefore(b,$('rail').lastChild)})}
+$('rail').innerHTML='<label title="载入图片"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><input type="file" id="file" accept="image/*" aria-label="载入图片"></label>';
+function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f);pics.push([f.name,u]);setImage(u).catch(()=>{pics.splice(pics.findIndex(p=>p[1]===u),1);URL.revokeObjectURL(u);say('这张图片读不了')})}
+$('file').onchange=e=>{loadFile(e.target.files[0]);e.target.value=''};
+document.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drop')});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)stage.classList.remove('drop')});
+document.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');loadFile(e.dataTransfer.files[0])});
+$('copy').onclick=async()=>{const j=$('json');if(!j.hidden){j.hidden=true;return}
+ const t=JSON.stringify({强度:S.m,细调:S.f,噪声种子:S.seed},null,1);
+ try{await navigator.clipboard.writeText(t);say('已复制')}catch(e){j.hidden=false;j.value=t;j.select()}};
+let dl=null;
+if(window.claude&&window.claude.use)window.claude.use('downloads').then(x=>{dl=x}).catch(()=>{});
+$('export').onclick=async()=>{if(!srcTex)return;render();show(0);const p=new Promise(r=>glc.toBlob(r,'image/png'));live();const blob=await p;
+ if(dl){try{await dl.save({filename:'lofi-film.png',data:blob});say('已导出')}catch(e){if(!e||e.code!=='declined')say('导出失败')}return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lofi-film.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1e4)};
+
+sync();
+if(gl)setImage(IMAGES[0][1]).catch(e=>say(location.protocol==='file:'?'请通过本地服务器打开':'图片载入失败'));
+}
+</script>
+</body>
+</html>
