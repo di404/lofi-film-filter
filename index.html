@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>胶片录像带调节器</title>
+<title>Lofi Film Filter</title>
 <style>
 /* 看片台：中性深灰（不干扰判断图片的紫），图片占满，整行即推子 */
 :root{color-scheme:dark;--bg:#0e0e10;--panel:#18181b;--row:#232327;--row2:#1e1e22;--line:#2c2c31;--ink:#f2f1f5;--dim:#a3a2ab;--faint:#85848e;--acc:#b7a5ff;--fill:#4b4270}
@@ -39,6 +39,7 @@ button:focus-visible,input:focus-visible,label:focus-within:has(:focus-visible){
 .strip{display:flex;justify-content:safe center;gap:8px;padding:10px 16px 14px;overflow-x:auto;scrollbar-width:none}
 .strip button{flex:0 0 auto;width:104px;color:var(--dim);font-size:12px}
 .strip canvas{display:block;width:100%;height:66px;object-fit:cover;border-radius:6px;margin-bottom:6px;background:var(--row2);box-shadow:0 0 0 1px #fff1}
+.strip span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .strip button:hover{color:var(--ink)}
 .strip button.on{color:var(--ink)}
 .strip button.on canvas{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--acc)}
@@ -49,6 +50,10 @@ button:focus-visible,input:focus-visible,label:focus-within:has(:focus-visible){
 .ic:hover{background:var(--row);color:var(--ink)}
 .ic[aria-pressed=true]{background:var(--fill);color:#fff}
 .ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ic{position:relative}
+.ic select{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer;font-size:14px}
+.ic select option{background:var(--panel);color:var(--ink)}
+.ic:has(select:focus-visible){outline:2px solid var(--acc)}
 .ic input{position:absolute;width:1px;height:1px;opacity:0}
 .mods{flex:1;overflow-y:auto;padding:4px 12px 12px;display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:#3a3a40 transparent}
 .mod{flex:none;display:grid;grid-template-columns:minmax(0,1fr) 36px;border-radius:9px;background:var(--row);overflow:hidden}
@@ -56,6 +61,7 @@ button:focus-visible,input:focus-visible,label:focus-within:has(:focus-visible){
 .fader input{position:absolute;inset:0;width:100%;height:100%;margin:0;cursor:ew-resize}
 .fader span,.fader output{position:absolute;top:0;line-height:var(--h,46px);pointer-events:none}
 .fader span{left:14px;font-size:14px;font-weight:500}
+.fader span{right:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fader output{right:12px;font-variant-numeric:tabular-nums;color:var(--ink)}
 .mod.zero>.fader span,.mod.zero>.fader output{color:var(--faint)}
 .more{display:grid;place-items:center;color:var(--faint);border-left:1px solid var(--panel)}
@@ -95,55 +101,56 @@ dialog .ok{background:var(--ink);color:#17171a}dialog .ok:hover{background:#fff}
 </head>
 <body>
 <div class="app">
-  <nav class="rail" id="rail" aria-label="图片"></nav>
+  <nav class="rail" id="rail" data-ta="Images"></nav>
   <div class="stage" id="stage">
-    <canvas id="glc" aria-label="预览"></canvas>
-    <div class="split" id="split" role="slider" tabindex="0" aria-label="对比分割线" aria-valuemin="0" aria-valuemax="100" hidden></div>
-    <textarea id="json" hidden readonly aria-label="当前参数"></textarea>
+    <canvas id="glc" data-ta="Preview"></canvas>
+    <div class="split" id="split" role="slider" tabindex="0" data-ta="Compare with original" aria-valuemin="0" aria-valuemax="100" hidden></div>
+    <textarea id="json" hidden readonly data-ta="Settings"></textarea>
     <div class="msg" id="msg" role="status"></div>
   </div>
   <div class="strip" id="presets"></div>
   <aside class="panel">
     <div class="tools">
-      <button class="ic" id="cmp" title="对比原图" aria-label="对比原图" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M12 2v20"/><path d="M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7z" fill="currentColor" stroke="none" opacity=".45"/></svg></button>
-      <button class="ic" id="zoom" title="实际像素" aria-label="实际像素" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M5 8.5 7.5 7v10M16 8.5 18.5 7v10M12 10v.01M12 14.5v.01"/></svg></button>
-      <button class="ic" id="seed" title="随机调整" aria-label="随机调整"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5v.01M15.5 8.5v.01M12 12v.01M8.5 15.5v.01M15.5 15.5v.01" stroke-width="2.4"/></svg></button>
-      <button class="ic" id="copy" title="复制参数" aria-label="复制参数"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 5.5v0a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"/></svg></button>
+      <button class="ic" id="cmp" data-tt="Compare with original" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M12 2v20"/><path d="M12 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7z" fill="currentColor" stroke="none" opacity=".45"/></svg></button>
+      <button class="ic" id="zoom" data-tt="Actual pixels" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M5 8.5 7.5 7v10M16 8.5 18.5 7v10M12 10v.01M12 14.5v.01"/></svg></button>
+      <button class="ic" id="seed" data-tt="Randomize"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5v.01M15.5 8.5v.01M12 12v.01M8.5 15.5v.01M15.5 15.5v.01" stroke-width="2.4"/></svg></button>
+      <button class="ic" id="copy" data-tt="Copy settings"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 5.5v0a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2"/></svg></button>
+      <label class="ic" data-tt="Language"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c5 5 5 12 0 17-5-5-5-12 0-17"/></svg><select id="lang" data-ta="Language"></select></label>
     </div>
     <div id="mods" class="mods"></div>
-    <div class="out"><button class="pri" id="export">导出 PNG</button></div>
+    <div class="out"><button class="pri" id="export" data-t="Export PNG"></button></div>
   </aside>
 </div>
-<dialog id="ask" aria-labelledby="askT"><form method="dialog"><h2 id="askT">随机后会丢失当前调整，确认吗？</h2><div><button>取消</button><button class="ok" id="reseed">确认</button></div></form></dialog>
+<dialog id="ask" aria-labelledby="askT"><form method="dialog"><h2 id="askT" data-t="Randomizing discards your current adjustments. Continue?"></h2><div><button data-t="Cancel"></button><button class="ok" id="reseed" data-t="Confirm"></button></div></form></dialog>
 <script>
 {
 // build.py inlines every "assets/…jpg" below as a data URI for the single-file version
-const IMAGES = [["烛光","assets/sample.jpg"],["雨夜","assets/neon.jpg"],["天台","assets/dusk.jpg"],["田野","assets/field.jpg"],["人像","assets/face.jpg"],["机房","assets/lab.jpg"]];
+const IMAGES = [["Candle","assets/sample.jpg"],["Rain","assets/neon.jpg"],["Rooftop","assets/dusk.jpg"],["Field","assets/field.jpg"],["Portrait","assets/face.jpg"],["Lab","assets/lab.jpg"]];
 // [id, label, min, max, full(at 100%), neutral(null = not scaled), unit]
 const MODS = [
- {id:'tone',name:'影调',p:[
-  ['ev','曝光提升',0,2,1,0,'档'],['k','对比度',1,4,2.5,1,''],['toe','暗部深度',0,1.6,.8,0,''],['sat','饱和度',0,1.5,.65,1,''],
-  ['lav','高光冷白',0,1,1,0,''],['shd','暗部紫色',0,.7,.35,0,''],['vig','暗角',0,.6,.28,0,'']]},
- {id:'glow',name:'光晕',p:[
-  ['hal','胶片光晕',0,1.8,.9,0,''],['bloom','录像带光晕',0,1,.45,0,''],['halR','光晕范围',.3,3,1,null,'×'],['halT','光晕起点',.3,.9,.6,null,'']]},
- {id:'res',name:'清晰度',p:[
-  ['cap','采样宽度',160,1024,320,1024,'px'],['smear','横向拖影',0,3,.8,0,'']]},
- {id:'chroma',name:'色彩溢出',p:[
-  ['cblur','溢出长度',0,80,36,0,'px'],['coff','色彩偏移',0,30,10,0,'px'],['cgain','溢出浓度',.5,2.5,1.5,1,'×']]},
- {id:'grain',name:'颗粒',p:[
-  ['grain','细颗粒',0,16,6,0,''],['blot','斑驳',0,.3,.1,0,'']]},
- {id:'signal',name:'信号失真',p:[
-  ['jit','行抖动',0,2,.5,0,''],['scan','扫描线',0,.5,.18,0,'']]},
- {id:'jpeg',name:'压缩损伤',p:[
-  ['quant','量化强度',0,12,6,0,'×']]}
+ {id:'tone',name:'Tone',p:[
+  ['ev','Exposure',0,2,1,0,'EV'],['k','Contrast',1,4,2.5,1,''],['toe','Shadow depth',0,1.6,.8,0,''],['sat','Saturation',0,1.5,.65,1,''],
+  ['lav','Cool highlights',0,1,1,0,''],['shd','Violet shadows',0,.7,.35,0,''],['vig','Vignette',0,.6,.28,0,'']]},
+ {id:'glow',name:'Glow',p:[
+  ['hal','Film halation',0,1.8,.9,0,''],['bloom','Tape bloom',0,1,.45,0,''],['halR','Glow radius',.3,3,1,null,'×'],['halT','Glow threshold',.3,.9,.6,null,'']]},
+ {id:'res',name:'Softness',p:[
+  ['cap','Sample width',160,1024,320,1024,'px'],['smear','Smear',0,3,.8,0,'']]},
+ {id:'chroma',name:'Color bleed',p:[
+  ['cblur','Bleed length',0,80,36,0,'px'],['coff','Color offset',0,30,10,0,'px'],['cgain','Bleed density',.5,2.5,1.5,1,'×']]},
+ {id:'grain',name:'Grain',p:[
+  ['grain','Fine grain',0,16,6,0,''],['blot','Blotches',0,.3,.1,0,'']]},
+ {id:'signal',name:'Signal',p:[
+  ['jit','Line jitter',0,2,.5,0,''],['scan','Scanlines',0,.5,.18,0,'']]},
+ {id:'jpeg',name:'Compression',p:[
+  ['quant','Quantization',0,12,6,0,'×']]}
 ];
 const PRESETS = [
- ['推荐',{tone:50,glow:50,res:45,chroma:35,grain:50,signal:45,jpeg:30}],
- ['只要胶片',{tone:50,glow:50,res:0,chroma:0,grain:0,signal:0,jpeg:0}],
- ['轻',{tone:40,glow:40,res:25,chroma:25,grain:30,signal:25,jpeg:15}],
- ['中',{tone:50,glow:55,res:65,chroma:60,grain:70,signal:65,jpeg:50}],
- ['重',{tone:60,glow:65,res:100,chroma:100,grain:100,signal:100,jpeg:100}],
- ['关闭',{tone:0,glow:0,res:0,chroma:0,grain:0,signal:0,jpeg:0}]
+ ['Default',{tone:50,glow:50,res:45,chroma:35,grain:50,signal:45,jpeg:30}],
+ ['Film only',{tone:50,glow:50,res:0,chroma:0,grain:0,signal:0,jpeg:0}],
+ ['Light',{tone:40,glow:40,res:25,chroma:25,grain:30,signal:25,jpeg:15}],
+ ['Medium',{tone:50,glow:55,res:65,chroma:60,grain:70,signal:65,jpeg:50}],
+ ['Heavy',{tone:60,glow:65,res:100,chroma:100,grain:100,signal:100,jpeg:100}],
+ ['Off',{tone:0,glow:0,res:0,chroma:0,grain:0,signal:0,jpeg:0}]
 ];
 const FULL0={};MODS.forEach(m=>m.p.forEach(p=>FULL0[p[0]]=p[4]));
 const fresh=()=>({m:{...PRESETS[0][1]},f:{...FULL0},seed:7});
@@ -154,15 +161,34 @@ let msgT=0;const say=t=>{const m=$('msg');m.textContent=t;m.classList.add('on');
 let stT=0;const save=()=>{try{localStorage.setItem('lofiTuner2',JSON.stringify(S))}catch(e){}};
 const store=()=>{clearTimeout(stT);stT=setTimeout(save,200)};addEventListener('pagehide',save);
 
+// ---------- i18n: English text is the key ----------
+const LANGS={"en": "English", "zh-Hans": "简体中文", "zh-Hant": "繁體中文", "ja": "日本語", "ko": "한국어", "es": "Español", "fr": "Français", "de": "Deutsch"};
+const DICT={
+"zh-Hans":{"Tone":"影调","Exposure":"曝光提升","Contrast":"对比度","Shadow depth":"暗部深度","Saturation":"饱和度","Cool highlights":"高光冷白","Violet shadows":"暗部紫色","Vignette":"暗角","Glow":"光晕","Film halation":"胶片光晕","Tape bloom":"录像带光晕","Glow radius":"光晕范围","Glow threshold":"光晕起点","Softness":"清晰度","Sample width":"采样宽度","Smear":"横向拖影","Color bleed":"色彩溢出","Bleed length":"溢出长度","Color offset":"色彩偏移","Bleed density":"溢出浓度","Grain":"颗粒","Fine grain":"细颗粒","Blotches":"斑驳","Signal":"信号失真","Line jitter":"行抖动","Scanlines":"扫描线","Compression":"压缩损伤","Quantization":"量化强度","Default":"推荐","Film only":"只要胶片","Light":"轻","Medium":"中","Heavy":"重","Off":"关闭","Candle":"烛光","Rain":"雨夜","Rooftop":"天台","Field":"田野","Portrait":"人像","Lab":"机房","Reset":"恢复默认","Fine-tune":"细调","Load image":"载入图片","Images":"图片","Preview":"预览","Compare with original":"对比原图","Actual pixels":"实际像素","Randomize":"随机调整","Copy settings":"复制参数","Settings":"参数","Language":"语言","Export PNG":"导出 PNG","Randomizing discards your current adjustments. Continue?":"随机后会丢失当前调整，确认吗？","Cancel":"取消","Confirm":"确认","Copied":"已复制","Exported":"已导出","Export failed":"导出失败","Can’t read this image":"这张图片读不了","Couldn’t load the image":"图片载入失败","Open through a local server":"请通过本地服务器打开","WebGL2 isn’t supported in this browser":"此浏览器不支持 WebGL2"},
+"zh-Hant":{"Tone":"影調","Exposure":"曝光提升","Contrast":"對比度","Shadow depth":"暗部深度","Saturation":"飽和度","Cool highlights":"高光冷白","Violet shadows":"暗部紫色","Vignette":"暗角","Glow":"光暈","Film halation":"膠片光暈","Tape bloom":"錄影帶光暈","Glow radius":"光暈範圍","Glow threshold":"光暈起點","Softness":"清晰度","Sample width":"取樣寬度","Smear":"橫向拖影","Color bleed":"色彩溢出","Bleed length":"溢出長度","Color offset":"色彩偏移","Bleed density":"溢出濃度","Grain":"顆粒","Fine grain":"細顆粒","Blotches":"斑駁","Signal":"訊號失真","Line jitter":"行抖動","Scanlines":"掃描線","Compression":"壓縮損傷","Quantization":"量化強度","Default":"推薦","Film only":"僅膠片","Light":"輕","Medium":"中","Heavy":"重","Off":"關閉","Candle":"燭光","Rain":"雨夜","Rooftop":"天台","Field":"田野","Portrait":"人像","Lab":"機房","Reset":"恢復預設","Fine-tune":"細調","Load image":"載入圖片","Images":"圖片","Preview":"預覽","Compare with original":"對比原圖","Actual pixels":"實際像素","Randomize":"隨機調整","Copy settings":"複製參數","Settings":"參數","Language":"語言","Export PNG":"匯出 PNG","Randomizing discards your current adjustments. Continue?":"隨機後會遺失目前的調整，確認嗎？","Cancel":"取消","Confirm":"確認","Copied":"已複製","Exported":"已匯出","Export failed":"匯出失敗","Can’t read this image":"無法讀取這張圖片","Couldn’t load the image":"圖片載入失敗","Open through a local server":"請透過本機伺服器開啟","WebGL2 isn’t supported in this browser":"此瀏覽器不支援 WebGL2"},
+"ja":{"Tone":"トーン","Exposure":"露出","Contrast":"コントラスト","Shadow depth":"シャドウの深さ","Saturation":"彩度","Cool highlights":"ハイライトの寒色","Violet shadows":"シャドウの紫","Vignette":"周辺減光","Glow":"グロー","Film halation":"ハレーション","Tape bloom":"テープのにじみ","Glow radius":"グローの範囲","Glow threshold":"グローのしきい値","Softness":"ソフト","Sample width":"サンプル幅","Smear":"横ブレ","Color bleed":"色にじみ","Bleed length":"にじみの長さ","Color offset":"色ずれ","Bleed density":"にじみの濃さ","Grain":"粒状感","Fine grain":"細かい粒","Blotches":"まだら","Signal":"信号の乱れ","Line jitter":"ラインの揺れ","Scanlines":"走査線","Compression":"圧縮ノイズ","Quantization":"量子化","Default":"おすすめ","Film only":"フィルムのみ","Light":"弱","Medium":"中","Heavy":"強","Off":"オフ","Candle":"ろうそく","Rain":"雨の夜","Rooftop":"屋上","Field":"野原","Portrait":"人物","Lab":"制御室","Reset":"リセット","Fine-tune":"詳細","Load image":"画像を読み込む","Images":"画像","Preview":"プレビュー","Compare with original":"元画像と比較","Actual pixels":"等倍表示","Randomize":"ランダム","Copy settings":"設定をコピー","Settings":"設定","Language":"言語","Export PNG":"PNG を書き出す","Randomizing discards your current adjustments. Continue?":"現在の調整は失われます。ランダムにしますか？","Cancel":"キャンセル","Confirm":"確認","Copied":"コピーしました","Exported":"書き出しました","Export failed":"書き出しに失敗しました","Can’t read this image":"この画像を読み込めません","Couldn’t load the image":"画像を読み込めませんでした","Open through a local server":"ローカルサーバーで開いてください","WebGL2 isn’t supported in this browser":"このブラウザは WebGL2 非対応です"},
+"ko":{"Tone":"톤","Exposure":"노출","Contrast":"대비","Shadow depth":"섀도 깊이","Saturation":"채도","Cool highlights":"차가운 하이라이트","Violet shadows":"보라색 섀도","Vignette":"비네트","Glow":"글로우","Film halation":"필름 헐레이션","Tape bloom":"테이프 블룸","Glow radius":"글로우 범위","Glow threshold":"글로우 시작점","Softness":"부드러움","Sample width":"샘플링 너비","Smear":"가로 번짐","Color bleed":"색 번짐","Bleed length":"번짐 길이","Color offset":"색 어긋남","Bleed density":"번짐 농도","Grain":"그레인","Fine grain":"미세 그레인","Blotches":"얼룩","Signal":"신호 왜곡","Line jitter":"라인 떨림","Scanlines":"스캔라인","Compression":"압축 손상","Quantization":"양자화","Default":"추천","Film only":"필름만","Light":"약하게","Medium":"중간","Heavy":"강하게","Off":"끄기","Candle":"촛불","Rain":"비 오는 밤","Rooftop":"옥상","Field":"들판","Portrait":"인물","Lab":"제어실","Reset":"초기화","Fine-tune":"세부 조정","Load image":"이미지 불러오기","Images":"이미지","Preview":"미리보기","Compare with original":"원본과 비교","Actual pixels":"실제 픽셀","Randomize":"무작위","Copy settings":"설정 복사","Settings":"설정","Language":"언어","Export PNG":"PNG 내보내기","Randomizing discards your current adjustments. Continue?":"현재 조정 내용이 사라집니다. 계속할까요?","Cancel":"취소","Confirm":"확인","Copied":"복사했습니다","Exported":"내보냈습니다","Export failed":"내보내기 실패","Can’t read this image":"이 이미지를 읽을 수 없습니다","Couldn’t load the image":"이미지를 불러오지 못했습니다","Open through a local server":"로컬 서버로 열어 주세요","WebGL2 isn’t supported in this browser":"이 브라우저는 WebGL2를 지원하지 않습니다"},
+"es":{"Tone":"Tono","Exposure":"Exposición","Contrast":"Contraste","Shadow depth":"Sombras","Saturation":"Saturación","Cool highlights":"Luces frías","Violet shadows":"Sombras violeta","Vignette":"Viñeta","Glow":"Resplandor","Film halation":"Halo de película","Tape bloom":"Brillo de cinta","Glow radius":"Radio","Glow threshold":"Umbral","Softness":"Suavidad","Sample width":"Ancho de muestra","Smear":"Arrastre","Color bleed":"Sangrado de color","Bleed length":"Longitud","Color offset":"Desplazamiento","Bleed density":"Densidad","Grain":"Grano","Fine grain":"Grano fino","Blotches":"Manchas","Signal":"Señal","Line jitter":"Temblor de línea","Scanlines":"Líneas de barrido","Compression":"Compresión","Quantization":"Cuantización","Default":"Estándar","Film only":"Solo película","Light":"Ligero","Medium":"Medio","Heavy":"Fuerte","Off":"Sin efecto","Candle":"Vela","Rain":"Lluvia","Rooftop":"Azotea","Field":"Campo","Portrait":"Retrato","Lab":"Laboratorio","Reset":"Restablecer","Fine-tune":"Ajuste fino","Load image":"Cargar imagen","Images":"Imágenes","Preview":"Vista previa","Compare with original":"Comparar con el original","Actual pixels":"Píxeles reales","Randomize":"Aleatorio","Copy settings":"Copiar ajustes","Settings":"Ajustes","Language":"Idioma","Export PNG":"Exportar PNG","Randomizing discards your current adjustments. Continue?":"Se perderán los ajustes actuales. ¿Continuar?","Cancel":"Cancelar","Confirm":"Confirmar","Copied":"Copiado","Exported":"Exportado","Export failed":"Error al exportar","Can’t read this image":"No se puede leer la imagen","Couldn’t load the image":"No se pudo cargar la imagen","Open through a local server":"Ábrelo desde un servidor local","WebGL2 isn’t supported in this browser":"Este navegador no admite WebGL2"},
+"fr":{"Tone":"Tonalité","Exposure":"Exposition","Contrast":"Contraste","Shadow depth":"Ombres","Saturation":"Saturation","Cool highlights":"Lumières froides","Violet shadows":"Ombres violettes","Vignette":"Vignettage","Glow":"Halo","Film halation":"Halo argentique","Tape bloom":"Halo de bande","Glow radius":"Rayon","Glow threshold":"Seuil","Softness":"Douceur","Sample width":"Échantillonnage","Smear":"Traînée","Color bleed":"Bavure couleur","Bleed length":"Longueur","Color offset":"Décalage","Bleed density":"Densité","Grain":"Grain","Fine grain":"Grain fin","Blotches":"Taches","Signal":"Signal","Line jitter":"Gigue de ligne","Scanlines":"Lignes de balayage","Compression":"Compression","Quantization":"Quantification","Default":"Défaut","Film only":"Film seul","Light":"Léger","Medium":"Moyen","Heavy":"Fort","Off":"Aucun","Candle":"Bougie","Rain":"Pluie","Rooftop":"Toit","Field":"Champ","Portrait":"Portrait","Lab":"Labo","Reset":"Réinitialiser","Fine-tune":"Réglage fin","Load image":"Charger une image","Images":"Images","Preview":"Aperçu","Compare with original":"Comparer à l’original","Actual pixels":"Pixels réels","Randomize":"Aléatoire","Copy settings":"Copier les réglages","Settings":"Réglages","Language":"Langue","Export PNG":"Exporter en PNG","Randomizing discards your current adjustments. Continue?":"Les réglages actuels seront perdus. Continuer ?","Cancel":"Annuler","Confirm":"Confirmer","Copied":"Copié","Exported":"Exporté","Export failed":"Échec de l’export","Can’t read this image":"Image illisible","Couldn’t load the image":"Impossible de charger l’image","Open through a local server":"Ouvrez via un serveur local","WebGL2 isn’t supported in this browser":"WebGL2 n’est pas pris en charge"},
+"de":{"Tone":"Tonwert","Exposure":"Belichtung","Contrast":"Kontrast","Shadow depth":"Schattentiefe","Saturation":"Sättigung","Cool highlights":"Kühle Lichter","Violet shadows":"Violette Schatten","Vignette":"Vignette","Glow":"Leuchten","Film halation":"Film-Halo","Tape bloom":"Band-Bloom","Glow radius":"Radius","Glow threshold":"Schwelle","Softness":"Weichheit","Sample width":"Abtastbreite","Smear":"Verwischung","Color bleed":"Farbsaum","Bleed length":"Länge","Color offset":"Versatz","Bleed density":"Dichte","Grain":"Korn","Fine grain":"Feines Korn","Blotches":"Flecken","Signal":"Signal","Line jitter":"Zeilenzittern","Scanlines":"Scanlines","Compression":"Kompression","Quantization":"Quantisierung","Default":"Standard","Film only":"Nur Film","Light":"Leicht","Medium":"Mittel","Heavy":"Stark","Off":"Aus","Candle":"Kerze","Rain":"Regen","Rooftop":"Dach","Field":"Feld","Portrait":"Porträt","Lab":"Labor","Reset":"Zurücksetzen","Fine-tune":"Feineinstellung","Load image":"Bild laden","Images":"Bilder","Preview":"Vorschau","Compare with original":"Mit Original vergleichen","Actual pixels":"Originalgröße","Randomize":"Zufällig","Copy settings":"Einstellungen kopieren","Settings":"Einstellungen","Language":"Sprache","Export PNG":"PNG exportieren","Randomizing discards your current adjustments. Continue?":"Aktuelle Anpassungen gehen verloren. Fortfahren?","Cancel":"Abbrechen","Confirm":"Bestätigen","Copied":"Kopiert","Exported":"Exportiert","Export failed":"Export fehlgeschlagen","Can’t read this image":"Bild nicht lesbar","Couldn’t load the image":"Bild konnte nicht geladen werden","Open through a local server":"Bitte über lokalen Server öffnen","WebGL2 isn’t supported in this browser":"WebGL2 wird nicht unterstützt"}};
+let lang='en';try{lang=localStorage.getItem('lofiLang')||'en'}catch(e){}
+if(!LANGS[lang])lang='en';
+const T=k=>(DICT[lang]||{})[k]||k;
+function applyLang(){document.documentElement.lang=lang;
+ document.querySelectorAll('[data-t]').forEach(e=>e.textContent=T(e.dataset.t));
+ document.querySelectorAll('[data-ta]').forEach(e=>e.setAttribute('aria-label',T(e.dataset.ta)));
+ document.querySelectorAll('[data-tt]').forEach(e=>{e.title=T(e.dataset.tt);e.setAttribute('aria-label',e.title)});
+ rail()}
+
 // ---------- UI ----------
 const fmt=(v,u)=>{const a=Math.abs(v);return (a>=100?v.toFixed(0):a>=10?v.toFixed(1):v.toFixed(2))+(u?' '+u:'')};
 $('mods').innerHTML=MODS.map(m=>`<section class="mod" id="m-${m.id}">
- <label class="fader"><input type="range" min="0" max="100" step="1" id="r-${m.id}" data-m="${m.id}" aria-label="${m.name}强度"><span>${m.name}</span><output id="o-${m.id}"></output></label>
- <button class="more" aria-expanded="false" aria-controls="a-${m.id}" data-more="${m.id}" title="细调" aria-label="${m.name}细调"></button>
+ <label class="fader"><input type="range" min="0" max="100" step="1" id="r-${m.id}" data-m="${m.id}" data-ta="${m.name}"><span data-t="${m.name}"></span><output id="o-${m.id}"></output></label>
+ <button class="more" aria-expanded="false" aria-controls="a-${m.id}" data-more="${m.id}" data-tt="Fine-tune"></button>
  <div class="adv" id="a-${m.id}" hidden>
- ${m.p.map(([id,l,mn,mx])=>`<label class="fader"><input type="range" id="p-${id}" data-p="${id}" min="${mn}" max="${mx}" step="${(mx-mn)/200}" aria-label="${l}"><span>${l}</span><output id="po-${id}"></output></label>`).join('')}
- <button class="rst" data-rst="${m.id}" hidden>恢复默认</button></div></section>`).join('');
-$('presets').innerHTML=PRESETS.map((p,i)=>`<button data-pre="${i}"><canvas width="208" height="132"></canvas>${p[0]}</button>`).join('');
+ ${m.p.map(([id,l,mn,mx])=>`<label class="fader"><input type="range" id="p-${id}" data-p="${id}" min="${mn}" max="${mx}" step="${(mx-mn)/200}" data-ta="${l}"><span data-t="${l}"></span><output id="po-${id}"></output></label>`).join('')}
+ <button class="rst" data-rst="${m.id}" data-t="Reset" hidden></button></div></section>`).join('');
+$('presets').innerHTML=PRESETS.map((p,i)=>`<button data-pre="${i}"><canvas width="208" height="132"></canvas><span data-t="${p[0]}"></span></button>`).join('');
 const units={};MODS.forEach(m=>m.p.forEach(p=>units[p[0]]=p[6]));
 function paint(el){const mn=+el.min,mx=+el.max;el.style.setProperty('--p',((el.value-mn)/(mx-mn)*100)+'%')}
 function sync(){
@@ -192,7 +218,7 @@ function E(id){for(const m of MODS)for(const p of m.p)if(p[0]===id){const f=S.f[
 // ---------- WebGL ----------
 const glc=$('glc');
 const gl=glc.getContext('webgl2',{preserveDrawingBuffer:true,premultipliedAlpha:false,antialias:false});
-if(!gl)say('此浏览器不支持 WebGL2');
+if(!gl)say(T('WebGL2 isn’t supported in this browser'));
 if(gl)gl.getExtension('EXT_color_buffer_float')||gl.getExtension('EXT_color_buffer_half_float');
 const VS=`#version 300 es
 in vec2 a;out vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0,1);}`;
@@ -364,24 +390,26 @@ async function setImage(u){const id=++want,im=await loadI(u);if(id!==want)return
  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(im,0,0,W,H);
  glc.width=W;glc.height=H;if(srcTex)gl.deleteTexture(srcTex);srcTex=mkTex(W,H,c);Z=1;cur=u;rail();place();thumbs()}
 function rail(){$('rail').querySelectorAll('button').forEach(b=>b.remove());
- pics.forEach(([n,u])=>{const b=document.createElement('button');b.title=n;b.ariaLabel=n;b.style.backgroundImage=`url("${u}")`;b.classList.toggle('on',u===cur);b.onclick=()=>setImage(u).catch(()=>say('图片载入失败'));$('rail').insertBefore(b,$('rail').lastChild)})}
-$('rail').innerHTML='<label title="载入图片"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><input type="file" id="file" accept="image/*" aria-label="载入图片"></label>';
-function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f);pics.push([f.name,u]);setImage(u).catch(()=>{pics.splice(pics.findIndex(p=>p[1]===u),1);URL.revokeObjectURL(u);say('这张图片读不了')})}
+ pics.forEach(([n,u])=>{const b=document.createElement('button');b.title=b.ariaLabel=T(n);b.style.backgroundImage=`url("${u}")`;b.classList.toggle('on',u===cur);b.onclick=()=>setImage(u).catch(()=>say(T('Couldn’t load the image')));$('rail').insertBefore(b,$('rail').lastChild)})}
+$('rail').innerHTML='<label data-tt="Load image"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><input type="file" id="file" accept="image/*" data-ta="Load image"></label>';
+function loadFile(f){if(!f||!f.type.startsWith('image/'))return;const u=URL.createObjectURL(f);pics.push([f.name,u]);setImage(u).catch(()=>{pics.splice(pics.findIndex(p=>p[1]===u),1);URL.revokeObjectURL(u);say(T('Can’t read this image'))})}
 $('file').onchange=e=>{loadFile(e.target.files[0]);e.target.value=''};
 document.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drop')});
 document.addEventListener('dragleave',e=>{if(!e.relatedTarget)stage.classList.remove('drop')});
 document.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drop');loadFile(e.dataTransfer.files[0])});
 $('copy').onclick=async()=>{const j=$('json');if(!j.hidden){j.hidden=true;return}
- const t=JSON.stringify({强度:S.m,细调:S.f,噪声种子:S.seed},null,1);
- try{await navigator.clipboard.writeText(t);say('已复制')}catch(e){j.hidden=false;j.value=t;j.select()}};
+ const t=JSON.stringify({strength:S.m,fine:S.f,seed:S.seed},null,1);
+ try{await navigator.clipboard.writeText(t);say(T('Copied'))}catch(e){j.hidden=false;j.value=t;j.select()}};
 let dl=null;
 if(window.claude&&window.claude.use)window.claude.use('downloads').then(x=>{dl=x}).catch(()=>{});
 $('export').onclick=async()=>{if(!srcTex)return;render();show(0);const p=new Promise(r=>glc.toBlob(r,'image/png'));live();const blob=await p;
- if(dl){try{await dl.save({filename:'lofi-film.png',data:blob});say('已导出')}catch(e){if(!e||e.code!=='declined')say('导出失败')}return}
+ if(dl){try{await dl.save({filename:'lofi-film.png',data:blob});say(T('Exported'))}catch(e){if(!e||e.code!=='declined')say(T('Export failed'))}return}
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='lofi-film.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1e4)};
 
-sync();
-if(gl)setImage(IMAGES[0][1]).catch(e=>say(location.protocol==='file:'?'请通过本地服务器打开':'图片载入失败'));
+$('lang').innerHTML=Object.entries(LANGS).map(([k,n])=>`<option value="${k}">${n}</option>`).join('');$('lang').value=lang;
+$('lang').onchange=e=>{lang=e.target.value;try{localStorage.setItem('lofiLang',lang)}catch(e){}applyLang()};
+applyLang();sync();
+if(gl)setImage(IMAGES[0][1]).catch(e=>say(location.protocol==='file:'?T('Open through a local server'):T('Couldn’t load the image')));
 }
 </script>
 </body>
